@@ -8,4 +8,4 @@ COPY ./requirements.txt .
 
 RUN pip install -r requirements.txt
 
-CMD streamlit run gui.py --server.port 80
+CMD ["streamlit", "run", "gui.py", "--server.port", "80"]

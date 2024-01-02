@@ -1,6 +1,6 @@
-from typing import Tuple
-
+import fitz
 import streamlit as st
+from typing import Tuple
 from langchain.prompts import PromptTemplate
 from langchain.schema import StrOutputParser
 from langchain.chat_models import AzureChatOpenAI
@@ -33,14 +33,14 @@ job_requirements_template = PromptTemplate.from_template("""
 """)
 
 cv_screening_template = PromptTemplate.from_template("""
-    Below is a list of requirements for a job along with a personal CV.
-    For each requirement in the list, asses whether or not the
-    candidate is a good match.
+    Below is a list of requirements for a job along with one or more personal CVs.
+    For each requirement in the list, asses whether or not each of the
+    candidates are a good match.
 
-     Output a table in markdown format with 3 columns:
-     1) The requirement itself
-     2) Your assessment whether the candidate fulfills the requirement (YES/NO)
-     3) An explanation of your assessment
+     Output a table in markdown format with these columns:
+     - A column with the requirement itself
+     - For each candidate, one column with the assessment (YES/NO)
+     - For each candidate, one column with an explanation of the assessment
 
 
     ##### JOB REQUIREMENTS START #####
@@ -48,9 +48,7 @@ cv_screening_template = PromptTemplate.from_template("""
     ##### JOB REQUIREMENTS END #####
 
 
-    ##### CANDIDATE CV START #####
     {cv_text}
-    ##### CANDIDATE CV END #####
 """)
 
 
@@ -84,6 +82,23 @@ def invoke_chain(job_text: str, cv_text: str) -> Tuple[str, str]:
     return output['job_requirements'], output['screening']
 
 
+# -- PDF files ----------------------------------------------------------------
+
+
+def extract_text_from_pdf(pdf_file: bytes) -> str:
+    """
+    Extract text from a PDF file.
+
+    :param pdf_file: PDF file as bytes.
+    :return: Text from PDF file.
+    """
+    text = ''
+    with fitz.open(stream=pdf_file, filetype='pdf') as doc:
+        for page in doc:
+            text += page.get_text()
+    return text
+
+
 # -- Streamlit app ------------------------------------------------------------
 
 
@@ -94,17 +109,36 @@ st.set_page_config(
 
 st.header('CV Screening')
 
+cv_texts = []
 job_requirements = None
 screening_table = None
 
 with st.form('screening'):
     job_text = st.text_area('Enter job description in plain text:')
     cv_text = st.text_area('CV in plain text:')
+    uploaded_files = st.file_uploader(
+        label='Or upload CVs as PDF files (up to 3):',
+        type=['pdf'],
+        accept_multiple_files=True,
+    )
+
+    if cv_text:
+        cv_texts.append(cv_text)
+
+    for uploaded_file in uploaded_files:
+        cv_bytes_data = uploaded_file.read()
+        cv_text_data = extract_text_from_pdf(cv_bytes_data)
+        cv_texts.append(cv_text_data)
+
+    cv_text_concat = '\n\n'.join([
+        f'##### CV {i} START #####\n{cv_text}\n##### CV {i} END #####'
+        for i, cv_text in enumerate(cv_texts)
+    ])
 
     if st.form_submit_button('Start Screening'):
         job_requirements, screening_table = invoke_chain(
             job_text=job_text,
-            cv_text=cv_text,
+            cv_text=cv_text_concat,
         )
 
 if job_requirements:

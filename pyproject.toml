@@ -17,6 +17,7 @@ openai = "*"
 pydantic = "*"
 langchain = "*"
 streamlit = "*"
+PyMuPDF = "*"
 
 [tool.poetry.extras]
 uvicorn = ["standard"]
